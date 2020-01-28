@@ -48,7 +48,7 @@ void barber(){
         // tell the price (alt.: put money in the register)     # SYNC_1 cust <-> barb
         // shave
         // clean the seat
-        // wait for change and give it (greedy)      # SYNC cust&barb <-> register content
+        // wait for register access, change and give it (greedy)      # SYNC cust&barb <-> register content
         // LÖÖÖÖP
     }
 }
@@ -57,7 +57,7 @@ void customer(){
     while(1){
         // make money
         // go to barber's
-            // if the waiting room is full, LOOP
+            // if the waiting room is full, break
         
         // else wait for barber
         // pay              # SYNC_1 cust <-> barb
@@ -82,7 +82,8 @@ int main() {
  
  representations:
     # waiting room: msg Q
-        -- guarded by a binary semaphore
+        - queue of clients (PIDs?)
+        - guarded by a binary semaphore
     # shaving capacity: semafor o maks stopniu F (?)
     
     # cash register: shared memory - no of coins of every value
