@@ -1,21 +1,35 @@
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/sem.h>
+
 #include <time.h>
+#include <string.h>
+
+/*
+ * argv:
+ *  [1]: no of barbers      (barbN)
+ *  [2]: no of customers    (custN)
+ *  [3]: no of seats        (seatN)
+ *  [4]: waiting room size  (waitN)
+ *  [5]: seed for random generator  (*seed)
+ * */
 
 
-static  struct  sembuf  buf;
+static struct sembuf buf;
 
 
 void sem_raise(int sem_id, int sem_num) {
     buf.sem_num = sem_num;
     buf.sem_op = 1;
     buf.sem_flg = 0;
-    if (sem_op(sem_id, &buf, 1) == -1) {
+    if (semop(sem_id, &buf, 1) == -1) {
         perror("-- Raising semaphore --");
         exit(1);
     }
@@ -26,7 +40,7 @@ void sem_lower(int sem_id, int sem_num) {
     buf.sem_num = sem_num;
     buf.sem_op = -1;
     buf.sem_flg = 0;
-    if (sem_op(sem_id, &buf, 1) == -1) {
+    if (semop(sem_id, &buf, 1) == -1) {
         perror("-- Lowering semaphore --");
         exit(1);
     }
@@ -67,13 +81,47 @@ void customer(){
     }
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    unsigned int barbN = 7, custN = 10, waitN = 2, seatN = 5, rand_seed = time(NULL);
+    unsigned int *seed = &rand_seed;
+    char logging[1024];
+
+    // create log file to follow the execution
+    char log_filename[18];
+    sprintf(log_filename, "log_%ld.log", time(NULL));
+    int log_file = creat(log_filename, 0644);
+    printf("Logging to file %s", log_filename);
+
     // choose seed and print it
+    switch (argc) {
+        case 6:
+            *seed = strtol(argv[5], NULL, 10);
+        case 5:
+            waitN = strtol(argv[4], NULL, 10);
+        case 4:
+            seatN = strtol(argv[3], NULL, 10);
+        case 3:
+            custN = strtol(argv[2], NULL, 10);
+        case 2:
+            barbN = strtol(argv[1], NULL, 10);
+            break;
+    }
+
+    sprintf(logging, "--- Starting execution: seed = %d\n%d barbers, %d customers, %d seats, %d in waiting room ---\n\n", *seed, barbN, custN, seatN, waitN);
+    write(log_file, logging, strlen(logging));
     // srand with this fancy function for multithreaded
-    
+
     // init barbers
+    for(int i=0; i<barbN; i++)
+        if(!fork())
+            barber();
     
     // init customers
+    for(int i=0; i<custN; i++)
+        if(!fork())
+            customer();
+
+    wait(NULL);
 }
 
 /*
