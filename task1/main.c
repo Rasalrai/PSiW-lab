@@ -35,6 +35,8 @@ void sem_raise(int sem_id, int sem_num) {
     }
 }
 
+int coin_value[3] = {1, 2, 5};
+
 
 void sem_lower(int sem_id, int sem_num) {
     buf.sem_num = sem_num;
@@ -46,14 +48,7 @@ void sem_lower(int sem_id, int sem_num) {
     }
 }
 
-
-// F: No of barbers
-// number of customers (as many as you spawn?)
-
-// P: waiting room capacity
-// N: shaving capacity
-// contents of the shared cash register
-
+// ############################################################
 
 void barber(){
     while(1){
@@ -66,6 +61,8 @@ void barber(){
         // LÖÖÖÖP
     }
 }
+
+// ############################################################
 
 void customer(){
     while(1){
@@ -81,6 +78,8 @@ void customer(){
     }
 }
 
+// ############################################################
+
 int main(int argc, char* argv[]) {
     unsigned int barbN = 7, custN = 10, waitN = 2, seatN = 5, rand_seed = time(NULL);
     unsigned int *seed = &rand_seed;
@@ -94,6 +93,7 @@ int main(int argc, char* argv[]) {
 
     // choose seed and print it
     switch (argc) {
+        default:
         case 6:
             *seed = strtol(argv[5], NULL, 10);
         case 5:
@@ -122,6 +122,55 @@ int main(int argc, char* argv[]) {
             customer();
 
     wait(NULL);
+}
+
+// ############################################################
+// helper functions
+
+void toss_a_coin(const int* coins, int* cash_reg) {
+    /* customer tosses coins to their barber */
+    // TODO WIP
+    // safely open the register
+    for (int i = 0; i < 3; i++)
+        cash_reg[i] += coins[i];
+    //close the register
+}
+
+int give_change(int paid, int price, int* cash_reg) {       // TODO
+    /* available coins of value 1, 2 and 5 */
+    // TODO WIP
+    int change[3] = {0, 0, 0}, diff = paid - price;
+    /*
+     * wait for register access
+     * calculate and try to give change
+     * if succeeded, let the customer go and remember money
+     * close the cash register so that others can use it
+     * return 1 if succeeded, 0 if not
+     * */
+    // open safely
+    for (int i = 2; i <= 0; i--) {
+        while (change[i] <= cash_reg[i] && diff && diff >= coin_value[i]) {     // while there is still cash available
+            change[i]++;
+            diff -= coin_value[i];
+        }
+    }
+    if (diff < 0) {
+        printf("Problem calculating change");
+        exit(1);
+    }
+    if (!diff) {
+        // let the customer go
+        // take the change
+        for (int i = 0; i < 3; i++)
+            cash_reg[i] -= change[i];
+        // close the register
+
+        return 1;
+    }
+
+    // close the register
+
+    return 0;
 }
 
 /*
