@@ -21,7 +21,7 @@
  *  [5]: seed for random generator  (*seed)
  * */
 
-
+unsigned int *seed;
 static struct sembuf buf;
 
 
@@ -67,6 +67,11 @@ void barber(){
 void customer(){
     while(1){
         // make money
+        usleep(rand_r(seed)%100);
+
+        if(!waiting_room_full) {
+
+        }
         // go to barber's
             // if the waiting room is full, break
         
@@ -82,7 +87,7 @@ void customer(){
 
 int main(int argc, char* argv[]) {
     unsigned int barbN = 7, custN = 10, waitN = 2, seatN = 5, rand_seed = time(NULL);
-    unsigned int *seed = &rand_seed;
+    seed = &rand_seed;
     char logging[1024];
 
     // create log file to follow the execution
@@ -110,6 +115,7 @@ int main(int argc, char* argv[]) {
     sprintf(logging, "--- Starting execution: seed = %d\n%d barbers, %d customers, %d seats, %d in waiting room ---\n\n", *seed, barbN, custN, seatN, waitN);
     write(log_file, logging, strlen(logging));
     // srand with this fancy function for multithreaded
+
 
     // init barbers
     for(int i=0; i<barbN; i++)
