@@ -8,6 +8,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/sem.h>
+#include <sys/msg.h>
 
 #include <time.h>
 #include <string.h>
@@ -23,6 +24,9 @@
 
 unsigned int *seed;
 static struct sembuf buf;
+unsigned int barbN, custN, waitN, seatN, rand_seed, waiting_room, waiting_door;
+
+
 
 
 void sem_raise(int sem_id, int sem_num) {
@@ -52,7 +56,7 @@ void sem_lower(int sem_id, int sem_num) {
 
 void barber(){
     while(1){
-        // wait for a customer to arrive
+        // wait for a customer to arrive - msgrcv
         // wait for a free seat
         // tell the price (alt.: put money in the register)     # SYNC_1 cust <-> barb
         // shave
@@ -65,17 +69,20 @@ void barber(){
 // ############################################################
 
 void customer(){
+    struct msqid_ds q_info;
     while(1){
         // make money
         usleep(rand_r(seed)%100);
+        sem_lower(waiting_door, 0);
+        msgctl(waiting_room, CMD, *q_info);
 
-        if(!waiting_room_full) {
-
+        if(q_info.msgqnum < waitN) {
         }
         // go to barber's
-            // if the waiting room is full, break
+        // check current no of items in msgq - waiting room
+            // if the waiting room is full, break >= waitN
         
-        // else wait for barber
+        // else wait for barber     msgsnd
         // pay              # SYNC_1 cust <-> barb
         // get shaved
         // wait for change to receive
@@ -86,7 +93,7 @@ void customer(){
 // ############################################################
 
 int main(int argc, char* argv[]) {
-    unsigned int barbN = 7, custN = 10, waitN = 2, seatN = 5, rand_seed = time(NULL);
+    barbN = 7, custN = 12, waitN = 4, seatN = 5, rand_seed = time(NULL);
     seed = &rand_seed;
     char logging[1024];
 
@@ -111,6 +118,14 @@ int main(int argc, char* argv[]) {
             barbN = strtol(argv[1], NULL, 10);
             break;
     }
+
+    // init all structures used for synchronization
+    // waiting room -> msg q
+    waiting_room = msgget(IPC_PRIVATE, 0640);
+    waiting_door = semget(IPC_PRIVATE, 1, 0640);       // to make sure that 2 customers don't enter at the same time
+
+    //
+
 
     sprintf(logging, "--- Starting execution: seed = %d\n%d barbers, %d customers, %d seats, %d in waiting room ---\n\n", *seed, barbN, custN, seatN, waitN);
     write(log_file, logging, strlen(logging));
@@ -179,13 +194,18 @@ int give_change(int paid, int price, int* cash_reg) {       // TODO
     return 0;
 }
 
+int waiting_room_full(int q, int size) {
+
+
+}
+
 /*
  may get stuck on:
     - everyone waits for change
  
  representations:
     # waiting room: msg Q
-        - queue of clients (PIDs?)
+        - clients identified by PIDs?
         - guarded by a binary semaphore
     # shaving capacity: semafor o maks stopniu F (?)
     
