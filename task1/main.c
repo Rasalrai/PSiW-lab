@@ -24,7 +24,7 @@
 
 struct msgbuf {
     long mtype;
-    int mtext;
+    int[4] mdata;
 };
 
 unsigned int *seed;
@@ -64,7 +64,7 @@ void sem_lower(int sem_id, int sem_num) {
 void barber(){
     while(1){
         // wait for a customer to arrive - msgrcv
-        msgrcv(waiting_room, );
+    msgrcv(waiting_room, );
         // TODO
         // wait for a free seat
         // tell the price (alt.: put money in the register)     # SYNC_1 cust <-> barb
@@ -80,24 +80,29 @@ void barber(){
 void customer(){
     struct msqid_ds q_info;
     struct msgbuf wait_msg;
+    wait_msg.mtype = 1;
     while(1){
         // make money
         usleep(rand_r(seed)%100);
-        wait_msg.mtype = 1;
-        // wait_msg.mtext = self.PID
+        // collect your wallet
+        
+        // wait_msg.mdata[3] = self.PID
 
         // go to barber and see if there's space for you
         sem_lower(waiting_door, 0);
         msgctl(waiting_room, IPC_STAT, &q_info);
-        sem_raise(waiting_door, 0);
+        
 
         if(q_info.msg_qnum < waitN) {
+            
             // wait for barber     msgsnd
             msgsnd();
+            sem_raise(waiting_door, 0);     // not sooner, so that noone else can enter before I do
             // pay              # SYNC_1 cust <-> barb
             // get shaved
             // wait for change to receive
         }
+        sem_raise(waiting_door, 0);
     }
 }
 
@@ -203,6 +208,13 @@ int give_change(int paid, int price, int* cash_reg) {       // TODO
     // close the register
 
     return 0;
+}
+
+void payday(int* wallet) {
+    // TODO think about modulos
+    wallet[0] = rand_r(seed);
+    wallet[1] = rand_r(seed);
+    wallet[2] = rand_r(seed);
 }
 
 
