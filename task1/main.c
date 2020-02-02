@@ -22,14 +22,20 @@
  *  [5]: seed for random generator  (*seed)
  * */
 
+struct msgbuf {
+    long mtype;
+    int mtext;
+};
+
 unsigned int *seed;
-static struct sembuf buf;
+// static struct sembuf buf;       // should use separate for each thread
 unsigned int barbN, custN, waitN, seatN, rand_seed, waiting_room, waiting_door;
 
 
 
 
 void sem_raise(int sem_id, int sem_num) {
+    struct sembuf buf;
     buf.sem_num = sem_num;
     buf.sem_op = 1;
     buf.sem_flg = 0;
@@ -43,6 +49,7 @@ int coin_value[3] = {1, 2, 5};
 
 
 void sem_lower(int sem_id, int sem_num) {
+    struct sembuf buf;
     buf.sem_num = sem_num;
     buf.sem_op = -1;
     buf.sem_flg = 0;
@@ -57,6 +64,8 @@ void sem_lower(int sem_id, int sem_num) {
 void barber(){
     while(1){
         // wait for a customer to arrive - msgrcv
+        msgrcv(waiting_room, );
+        // TODO
         // wait for a free seat
         // tell the price (alt.: put money in the register)     # SYNC_1 cust <-> barb
         // shave
@@ -70,23 +79,25 @@ void barber(){
 
 void customer(){
     struct msqid_ds q_info;
+    struct msgbuf wait_msg;
     while(1){
         // make money
         usleep(rand_r(seed)%100);
-        sem_lower(waiting_door, 0);
-        msgctl(waiting_room, CMD, *q_info);
+        wait_msg.mtype = 1;
+        // wait_msg.mtext = self.PID
 
-        if(q_info.msgqnum < waitN) {
+        // go to barber and see if there's space for you
+        sem_lower(waiting_door, 0);
+        msgctl(waiting_room, IPC_STAT, &q_info);
+        sem_raise(waiting_door, 0);
+
+        if(q_info.msg_qnum < waitN) {
+            // wait for barber     msgsnd
+            msgsnd();
+            // pay              # SYNC_1 cust <-> barb
+            // get shaved
+            // wait for change to receive
         }
-        // go to barber's
-        // check current no of items in msgq - waiting room
-            // if the waiting room is full, break >= waitN
-        
-        // else wait for barber     msgsnd
-        // pay              # SYNC_1 cust <-> barb
-        // get shaved
-        // wait for change to receive
-        // LÖÖÖÖP
     }
 }
 
@@ -194,10 +205,6 @@ int give_change(int paid, int price, int* cash_reg) {       // TODO
     return 0;
 }
 
-int waiting_room_full(int q, int size) {
-
-
-}
 
 /*
  may get stuck on:
