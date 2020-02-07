@@ -24,12 +24,15 @@
 
 struct msgbuf {
     long mtype;
-    int[4] mdata;
+    int[4] mdata;   // coins owned by the customer and their PID
 };
+
+
+int coin_value[3] = {1, 2, 5};
 
 unsigned int *seed;
 // static struct sembuf buf;       // should use separate for each thread
-unsigned int barbN, custN, waitN, seatN, rand_seed, waiting_room, waiting_door;
+unsigned int barbN, custN, waitN, seatN, rand_seed, coinN;
 
 
 
@@ -44,9 +47,6 @@ void sem_raise(int sem_id, int sem_num) {
         exit(1);
     }
 }
-
-int coin_value[3] = {1, 2, 5};
-
 
 void sem_lower(int sem_id, int sem_num) {
     struct sembuf buf;
@@ -137,10 +137,12 @@ int main(int argc, char* argv[]) {
 
     // init all structures used for synchronization
     // waiting room -> msg q
-    waiting_room = msgget(IPC_PRIVATE, 0640);
-    waiting_door = semget(IPC_PRIVATE, 1, 0640);       // to make sure that 2 customers don't enter at the same time
+    unsigned int waiting_room = msgget(IPC_PRIVATE, 0640);
+    unsigned int waiting_door = semget(IPC_PRIVATE, 1, 0640);       // to make sure that 2 customers don't enter at the same time
 
-    //
+    // cash register contents and semaphore
+    unsigned int cash_register = shmget(IPC_PRIVATE, coinN*sizeof(int), 0640);
+    unsigned int cash_access = semget(IPC_PRIVATE, 1, 0640);
 
 
     sprintf(logging, "--- Starting execution: seed = %d\n%d barbers, %d customers, %d seats, %d in waiting room ---\n\n", *seed, barbN, custN, seatN, waitN);
@@ -202,19 +204,19 @@ int give_change(int paid, int price, int* cash_reg) {       // TODO
             cash_reg[i] -= change[i];
         // close the register
 
-        return 1;
+        return 1;   // successful
     }
 
     // close the register
 
-    return 0;
+    return 0;   // not finished
 }
 
 void payday(int* wallet) {
-    // TODO think about modulos
-    wallet[0] = rand_r(seed);
-    wallet[1] = rand_r(seed);
-    wallet[2] = rand_r(seed);
+    // may need to adjust the money
+    wallet[0] = rand_r(seed)%3;
+    wallet[1] = rand_r(seed)%3;
+    wallet[2] = rand_r(seed)%5 + 5;
 }
 
 
