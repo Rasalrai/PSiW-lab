@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -13,6 +12,8 @@
 #include <time.h>
 #include <string.h>
 
+#define NEW_CUSTOMER 1
+
 /*
  * argv:
  *  [1]: no of barbers      (barbN)
@@ -24,36 +25,32 @@
 
 struct msgbuf {
     long mtype;
-    int[4] mdata;   // coins owned by the customer and their PID
+    int mdata[4];   // coins owned by the customer and their PID
 };
 
+struct sembuf sbuf;
+int coinN = 3, coin_value[3] = {1, 2, 5};
+unsigned int *seed, barbN, custN, waitN, seatN, rand_seed, waiting_room, waiting_door;
 
-int coin_value[3] = {1, 2, 5};
+// ############################################################
 
-unsigned int *seed;
-// static struct sembuf buf;       // should use separate for each thread
-unsigned int barbN, custN, waitN, seatN, rand_seed, coinN;
-
-
-
+void payday(int* wallet);
 
 void sem_raise(int sem_id, int sem_num) {
-    struct sembuf buf;
-    buf.sem_num = sem_num;
-    buf.sem_op = 1;
-    buf.sem_flg = 0;
-    if (semop(sem_id, &buf, 1) == -1) {
+    sbuf.sem_num = sem_num;
+    sbuf.sem_op = 1;
+    sbuf.sem_flg = 0;
+    if (semop(sem_id, &sbuf, 1) == -1) {
         perror("-- Raising semaphore --");
         exit(1);
     }
 }
 
 void sem_lower(int sem_id, int sem_num) {
-    struct sembuf buf;
-    buf.sem_num = sem_num;
-    buf.sem_op = -1;
-    buf.sem_flg = 0;
-    if (semop(sem_id, &buf, 1) == -1) {
+    sbuf.sem_num = sem_num;
+    sbuf.sem_op = -1;
+    sbuf.sem_flg = 0;
+    if (semop(sem_id, &sbuf, 1) == -1) {
         perror("-- Lowering semaphore --");
         exit(1);
     }
@@ -62,9 +59,11 @@ void sem_lower(int sem_id, int sem_num) {
 // ############################################################
 
 void barber(){
+    struct msgbuf buf;
+
     while(1){
         // wait for a customer to arrive - msgrcv
-    msgrcv(waiting_room, );
+    msgrcv(waiting_room, &buf, 4*sizeof(int), NEW_CUSTOMER, 0);
         // TODO
         // wait for a free seat
         // tell the price (alt.: put money in the register)     # SYNC_1 cust <-> barb
@@ -78,25 +77,24 @@ void barber(){
 // ############################################################
 
 void customer(){
-    struct msqid_ds q_info;
+    struct msqid_ds q_info;     // info about queue (need its length)
     struct msgbuf wait_msg;
-    wait_msg.mtype = 1;
+    wait_msg.mdata[3] = getpid();
+    wait_msg.mtype = NEW_CUSTOMER;
     while(1){
         // make money
         usleep(rand_r(seed)%100);
         // collect your wallet
-        
-        // wait_msg.mdata[3] = self.PID
+        payday(wait_msg.mdata);
 
         // go to barber and see if there's space for you
         sem_lower(waiting_door, 0);
         msgctl(waiting_room, IPC_STAT, &q_info);
-        
 
         if(q_info.msg_qnum < waitN) {
             
             // wait for barber     msgsnd
-            msgsnd();
+            msgsnd(waiting_room, &wait_msg, 4*sizeof(int), 0);
             sem_raise(waiting_door, 0);     // not sooner, so that noone else can enter before I do
             // pay              # SYNC_1 cust <-> barb
             // get shaved
@@ -113,6 +111,7 @@ int main(int argc, char* argv[]) {
     seed = &rand_seed;
     char logging[1024];
 
+    // TODO consider just writing to stdout instead
     // create log file to follow the execution
     char log_filename[18];
     sprintf(log_filename, "log_%ld.log", time(NULL));
@@ -145,7 +144,7 @@ int main(int argc, char* argv[]) {
     unsigned int cash_access = semget(IPC_PRIVATE, 1, 0640);
 
 
-    sprintf(logging, "--- Starting execution: seed = %d\n%d barbers, %d customers, %d seats, %d in waiting room ---\n\n", *seed, barbN, custN, seatN, waitN);
+    sprintf(logging, "--- Starting execution: seed = %d ---\n--- %d barbers, %d customers, %d seats, %d in waiting room ---\n\n", *seed, barbN, custN, seatN, waitN);
     write(log_file, logging, strlen(logging));
     // srand with this fancy function for multithreaded
 
