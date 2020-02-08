@@ -153,9 +153,9 @@ void barber(int seed){
 
         // clean the chair
         printf("%d[B]:\tFinished.\n", getpid());
+        // usleep(1000);    // for slowing the execution down
         sem_raise(styling_chairs, 0);
         // wait for register access, change and give it (greedy)
-        usleep(1000);
         while(!give_change(cost, cash_register, buf.mdata, cash_access)) {}
         // let the customer go
         msgsnd(finished_q, &cust_id, 0, 0);
@@ -268,8 +268,6 @@ int main(int argc, char* argv[]) {
     wait(NULL);
 }
 
-
-
 /*
  may get stuck on:
     - everyone waits for change
@@ -277,15 +275,9 @@ int main(int argc, char* argv[]) {
  representations:
     # waiting room: msg Q
         - clients identified by PIDs?
-        - guarded by a binary semaphore
-    # shaving capacity: semafor o maks stopniu F (?)
+
+    # chairs: a semaphore with max=chairN
     
     # cash register: shared memory - no of coins of every value
         - secured with a semaphore: for both paying and giving change
- 
- 
-    - cash register:
-        - payment: choose random value (with different probability?) until paid
-        - change: greedy (first check if has enough money, then make a fail condition while giving change; remember to free the sem after a fail, so someone else can put money)
- 
 */
