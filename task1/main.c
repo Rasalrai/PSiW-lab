@@ -14,6 +14,8 @@
 
 #define NEW_CUSTOMER 1
 
+// TODO error handling (e.g. for sending/receiving messages, creating stuff)
+
 /*
  * argv:
  *  [1]: no of barbers      (barbN)
@@ -30,12 +32,9 @@ struct msgbuf {
 
 struct sembuf sbuf;
 int coinN = 3, coin_value[3] = {1, 2, 5};
-unsigned int *seed, barbN, custN, waitN, seatN, waiting_room, waiting_door, cash_register, cash_access, styling_chairs;
-
+unsigned int barbN, custN, waitN, seatN, waiting_room, waiting_door, cash_reg_id, cash_access, styling_chairs, finished_q, *glob_seed;
 
 // ############################################################
-
-void payday(int* wallet);
 
 void sem_raise(int sem_id, int sem_num) {
     sbuf.sem_num = sem_num;
@@ -57,32 +56,111 @@ void sem_lower(int sem_id, int sem_num) {
     }
 }
 
+void toss_a_coin(const int* coins, int* cash, int cash_access) {
+    /* customer tosses coins to their barber */
+    // TODO WIP
+    // safely open the register
+    sem_lower(cash_access, 0);
+    printf("%d[B]:\tput money into cash register: %d*1, %d*2, %d*5\n", getpid(), coins[0], coins[1], coins[2]);
+
+    for (int i = 0; i < 3; i++)
+        cash[i] += coins[i];
+    //close the register
+    sem_raise(cash_access, 0);
+}
+
+int give_change(int price, int* cash_reg, int* wallet, int cash_access) {       // TODO
+    /* available coins of value 1, 2 and 5 */
+    // we assume that the customer can't run away before the transaction is finalized, so we "keep" their money in their wallet all the time, even after adding it to register
+    int change[3] = {0, 0, 0}, paid = 0, diff;
+    for (int i=0;i<3;i++)
+        paid+=wallet[i]*coin_value[i];
+    diff = paid - price;
+    /*
+     * wait for register access
+     * calculate and try to give change
+     * if succeeded, let the customer go and remember money
+     * close the cash register so that others can use it
+     * return 1 if succeeded, 0 if not
+     * */
+    // open safely
+    sem_lower(cash_access, 0);
+    for (int i = 2; i <= 0; i--) {
+        while (change[i] <= cash_reg[i] && diff && diff >= coin_value[i]) {     // while there is still cash available
+            change[i]++;
+            diff -= coin_value[i];
+        }
+    }
+    if (diff < 0) {
+        printf("Problem calculating change");
+        sem_raise(cash_access, 0);
+        exit(1);
+    }
+    if (!diff) {
+        // take change from the register and put it in the wallet
+        for (int i = 0; i < 3; i++) {
+            cash_reg[i] -= change[i];
+            wallet[i] = change[i];
+        }
+            
+        // close the register
+        sem_raise(cash_access, 0);
+
+        return 1;   // successful
+    }
+
+    // close the register
+    sem_raise(cash_access, 0);
+    return 0;   // not finished
+}
+
+void payday(int* wallet, int *seed) {
+    // we assume that the customers spend all their money before payday :shrug:
+                    // or that they only spend money on getting shaved?
+    // may need to adjust the money
+    wallet[0] = rand_r(seed)%3;
+    wallet[1] = rand_r(seed)%3;
+    wallet[2] = rand_r(seed)%5 + 6;
+}
+
+
 // ############################################################
 // printf("%d:\t\n", getpid());
 
-void barber(){
-    printf("%d:\t\t### Init as barber ###\n", getpid());
+void barber(int seed){
+    printf("%d:\t\t### Init as barber, seed: %d ###\n", getpid(), seed);
     struct msgbuf buf;
+    int cost, *cash_register = (int*)shmat(cash_reg_id, NULL, 0);
+    long cust_id;
 
     while(1){
         // wait for a customer to arrive - msgrcv
         msgrcv(waiting_room, &buf, 4*sizeof(int), NEW_CUSTOMER, 0);
-        printf("%d[B]:\tStarting with customer no %d\n", getpid(), buf.mdata[3]);
+        cost = rand_r(&seed)%25+4;
+        cust_id = buf.mdata[3];
+        printf("%d[B]:\tStarting a(n) $%d service for customer %ld\n", getpid(), cost, cust_id);
         // TODO
-        // wait for a free seat
+        // wait for a free chair
         sem_lower(styling_chairs, 0);
-        // tell the price (alt.: put money in the register)     # SYNC_1 cust <-> barb
+        
+        // take money (alt.: put money in the register)     # SYNC_1 cust <-> barb
+        toss_a_coin(buf.mdata, cash_register, cash_access);
         // shave
-        // clean the seat
-        // wait for register access, change and give it (greedy)      # SYNC cust&barb <-> register content
-        // LÖÖÖÖP
+        usleep(rand_r(&seed)%100+10);
+
+        // clean the chair
+        sem_raise(styling_chairs, 0);
+        // wait for register access, change and give it (greedy)
+        while(!give_change(cost, cash_register, buf.mdata, cash_access)) {}
+        // let the customer go
+        msgsnd(finished_q, &cust_id, 0, 0);
     }
 }
 
 // ############################################################
 
-void customer(){
-    printf("%d:\t\t### Init as customer ###\n", getpid());
+void customer(int seed){
+    printf("%d:\t\t### Init as customer, seed: %d ###\n", getpid(), seed);
     struct msqid_ds q_info;     // info about queue (need its length)
     struct msgbuf wait_msg;
     int tmp;
@@ -90,11 +168,11 @@ void customer(){
     wait_msg.mtype = NEW_CUSTOMER;
     while(1){
         // make money
-        tmp = rand_r(seed)%1000 + 50;
-        printf("%d[C]:\tWork for %d us\n", getpid(), tmp);
+        tmp = rand_r(&seed)%1000 + 50;
         usleep(tmp);
         // collect your wallet
-        payday(wait_msg.mdata);
+        payday(wait_msg.mdata, &seed);
+        printf("%d[C]:\tWorked for %d us; wallet: %d, %d, %d\n", getpid(), tmp, wait_msg.mdata[0], wait_msg.mdata[1], wait_msg.mdata[2]);
 
         // go to barber and see if there's space for you
         sem_lower(waiting_door, 0);
@@ -106,13 +184,13 @@ void customer(){
             // wait for barber     msgsnd
             msgsnd(waiting_room, &wait_msg, 4*sizeof(int), 0);
             sem_raise(waiting_door, 0);     // not sooner, so that noone else can enter before I do
-            printf("%d[C]:\tEntered the barber's", getpid());
-            
+            printf("%d[C]:\tEntered the barber's", getpid());            
             // wait, pay              # SYNC_1 cust <-> barb
-            // get shaved
-            // wait for change to receive (msg)
+
+            // wait for service and change (msgrcv)
+            msgrcv(finished_q, NULL, 0, (long)getpid(), 0);
         }
-        sem_raise(waiting_door, 0);
+        else sem_raise(waiting_door, 0);
     }
 }
 
@@ -120,9 +198,9 @@ void customer(){
 
 int main(int argc, char* argv[]) {
     barbN = 7, custN = 12, waitN = 4, seatN = 5;
-    unsigned int rand_seed = time(NULL);
-    seed = &rand_seed;
-    char logging[1024];
+    unsigned int rand_seed = time(NULL), tmp;
+    glob_seed = &rand_seed;
+    // char logging[1024];
 
     // TODO consider just writing to stdout instead
 
@@ -130,7 +208,7 @@ int main(int argc, char* argv[]) {
     switch (argc) {
         default:
         case 6:
-            *seed = strtol(argv[5], NULL, 10);
+            *glob_seed = strtol(argv[5], NULL, 10);
         case 5:
             waitN = strtol(argv[4], NULL, 10);
         case 4:
@@ -147,91 +225,39 @@ int main(int argc, char* argv[]) {
     // waiting room -> msg q
     waiting_room = msgget(IPC_PRIVATE, 0640);
     waiting_door = semget(IPC_PRIVATE, 1, 0640);       // to make sure that 2 customers don't enter at the same time
+    semctl(waiting_door, 0, SETVAL, 1);
 
     // cash register contents and semaphore
-    cash_register = shmget(IPC_PRIVATE, coinN*sizeof(int), 0640);
+    cash_reg_id = shmget(IPC_PRIVATE, coinN*sizeof(int), 0640);
     cash_access = semget(IPC_PRIVATE, 1, 0640);
+    semctl(cash_access, 0, SETVAL, 1);
 
     // styling chairs: semaphore, because it doesn't matter which chair exactly you use
     styling_chairs = semget(IPC_PRIVATE, seatN, 0640);
-    semctl(styling_chairs, 0, SETVAL, seatN);
+    semctl(styling_chairs, 0, SETVAL, (int)seatN);
 
+    // msgq for telling customers that they can leave
+    finished_q = msgget(IPC_PRIVATE, 0640);
 
-    printf("--- Starting execution: seed = %d ---\n--- %d barbers, %d customers, %d seats, %d in waiting room ---\n\n", *seed, barbN, custN, seatN, waitN);
+    printf("--- Starting execution: seed = %d ---\n--- %d barbers, %d customers, %d seats, %d in waiting room ---\n\n", *glob_seed, barbN, custN, seatN, waitN);
 
     // init barbers
-    for(int i=0; i<barbN; i++)
+    for(int i=0; i<barbN; i++) {
+        tmp = rand_r(glob_seed);
         if(!fork())
-            barber();
+            barber(tmp);
+    }
     
     // init customers
-    for(int i=0; i<custN; i++)
+    for(int i=0; i<custN; i++) {
+        tmp = rand_r(glob_seed);
         if(!fork())
-            customer();
+            customer(tmp);
+    }
 
     wait(NULL);
 }
 
-// ############################################################
-// helper functions
-
-void toss_a_coin(const int* coins, int* cash_reg) {
-    /* customer tosses coins to their barber */
-    // TODO WIP
-    // safely open the register
-    sem_raise(cash_reg, 0);
-    printf("%d[B]\tput money into cash register: %d*1, %d*2, %d*5\n", getpid(), coins[0], coins[1], coins[2]);
-    for (int i = 0; i < 3; i++)
-        cash_reg[i] += coins[i];
-    //close the register
-    sem_lower(cash_reg, 0);
-}
-
-int give_change(int paid, int price, int* cash_reg) {       // TODO
-    /* available coins of value 1, 2 and 5 */
-    // TODO WIP
-    int change[3] = {0, 0, 0}, diff = paid - price;
-    /*
-     * wait for register access
-     * calculate and try to give change
-     * if succeeded, let the customer go and remember money
-     * close the cash register so that others can use it
-     * return 1 if succeeded, 0 if not
-     * */
-    // open safely
-    for (int i = 2; i <= 0; i--) {
-        while (change[i] <= cash_reg[i] && diff && diff >= coin_value[i]) {     // while there is still cash available
-            change[i]++;
-            diff -= coin_value[i];
-        }
-    }
-    if (diff < 0) {
-        printf("Problem calculating change");
-        exit(1);
-    }
-    if (!diff) {
-        // let the customer go
-        // take the change
-        for (int i = 0; i < 3; i++)
-            cash_reg[i] -= change[i];
-        // close the register
-
-        return 1;   // successful
-    }
-
-    // close the register
-
-    return 0;   // not finished
-}
-
-void payday(int* wallet) {
-    // we assume that the customers spend all their money before payday :shrug:
-                    // or that they only spend money getting shaved?
-    // may need to adjust the money
-    wallet[0] = rand_r(seed)%3;
-    wallet[1] = rand_r(seed)%3;
-    wallet[2] = rand_r(seed)%5 + 5;
-}
 
 
 /*
