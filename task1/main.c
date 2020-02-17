@@ -147,6 +147,8 @@ void barber(int seed){
         
         // take money (alt.: put money in the register)     # SYNC_1 cust <-> barb
         toss_a_coin(buf.mdata, cash_register, cash_access);
+        // todo: send info that more cash is now in register (if someone's been waiting for change, they should check now)
+
         // shave
         printf("%d[B]:\tWorking.\n", getpid());
         usleep(rand_r(&seed)%100+10);
@@ -188,10 +190,9 @@ void customer(int seed){
         if(q_info.msg_qnum < waitN) {
             
             // wait for barber     msgsnd
-            msgsnd(waiting_room, &wait_msg, 4*sizeof(int), 0);
+            msgsnd(waiting_room, &wait_msg, 4*sizeof(int), 0);  // waiting for barber "with wallet out"
             sem_raise(waiting_door, 0);     // not sooner, so that noone else can enter before I do
             printf("%d[C]:\tEntered the barber's\n", getpid());            
-            // wait, pay              # SYNC_1 cust <-> barb
 
             // wait for service and change (msgrcv)
             msgrcv(finished_q, NULL, 0, (long)getpid(), 0);
