@@ -58,7 +58,6 @@ void sem_lower(int sem_id, int sem_num) {
 
 void toss_a_coin(const int* coins, int* cash, int cash_access) {
     /* customer tosses coins to their barber */
-    // TODO WIP
     // safely open the register
     sem_lower(cash_access, 0);
     printf("%d[B]:\tPut money into cash register: %d*1, %d*2, %d*5\n", getpid(), coins[0], coins[1], coins[2]);
@@ -70,8 +69,6 @@ void toss_a_coin(const int* coins, int* cash, int cash_access) {
 }
 
 int give_change(int price, int* cash_reg, int* wallet, int cash_access) {
-    // TODO THIS DOES NOT WORK :(
-    
     // we assume that the customer can't run away before the transaction is finalized, so we "keep" their money in their wallet all the time, even after adding it to register
     int change[3] = {0, 0, 0}, paid = 0, diff;
     for (int i=0;i<3;i++)
@@ -88,7 +85,7 @@ int give_change(int price, int* cash_reg, int* wallet, int cash_access) {
     // open safely
     sem_lower(cash_access, 0);
     for (int i = 2; i >= 0; i--) {
-        while (change[i] <= cash_reg[i] && diff && diff >= coin_value[i]) {     // while there is still cash available
+        while (change[i] <= cash_reg[i] && diff && diff >= coin_value[i]) {     // while cash is available and more needs to be given out
             change[i]++;
             diff -= coin_value[i];
         }
@@ -122,7 +119,7 @@ void payday(int* wallet, int *seed) {
     // may need to adjust the money
     wallet[0] += rand_r(seed)%3;
     wallet[1] += rand_r(seed)%3;
-    wallet[2] = rand_r(seed)%3 + 6;     // assume that the rest of this is spent anyway
+    wallet[2] = rand_r(seed)%3 + 6;     // assume that the rest of this is spent somewhere else
 }
 
 
@@ -194,7 +191,8 @@ void customer(int seed){
             sem_raise(waiting_door, 0);     // not sooner, so that noone else can enter before I do
             printf("%d[C]:\tEntered the barber's\n", getpid());            
 
-            // wait for service and change (msgrcv)
+            // wait for service and change
+            // todo: 
             msgrcv(finished_q, NULL, 0, (long)getpid(), 0);
         }
         else sem_raise(waiting_door, 0);
@@ -206,13 +204,10 @@ void customer(int seed){
 
 int main(int argc, char* argv[]) {
     barbN = 7, custN = 12, waitN = 4, seatN = 5;
-    unsigned int rand_seed = time(NULL), tmp;
+    // global random, used for seeding all processes' random generators
+    unsigned int rand_seed = time(NULL);
     glob_seed = &rand_seed;
-    // char logging[1024];
 
-    // TODO consider just writing to stdout instead
-
-    // choose seed and print it
     switch (argc) {
         default:
         case 6:
@@ -254,16 +249,14 @@ int main(int argc, char* argv[]) {
 
     // init barbers
     for(int i=0; i<barbN; i++) {
-        tmp = rand_r(glob_seed);
         if(!fork())
-            barber(tmp);
+            barber(rand_r(glob_seed));
     }
     
     // init customers
     for(int i=0; i<custN; i++) {
-        tmp = rand_r(glob_seed);
         if(!fork())
-            customer(tmp);
+            customer(rand_r(glob_seed));
     }
 
     wait(NULL);
