@@ -117,8 +117,8 @@ int give_change(int price, int* cash_reg, int* wallet, int cash_access) {
 void payday(int* wallet, int *seed) {
     // the longer the customers wait (which may mean that giving change takes time), the more money (including smaller coins) they have
     // may need to adjust the money
-    wallet[0] += rand_r(seed)%3;
-    wallet[1] += rand_r(seed)%3;
+    wallet[0] = rand_r(seed)%3;
+    wallet[1] = rand_r(seed)%3;
     wallet[2] = rand_r(seed)%3 + 6;     // assume that the rest of this is spent somewhere else
 }
 
@@ -129,16 +129,16 @@ void payday(int* wallet, int *seed) {
 void barber(int seed){
     printf("%d:\t\t### Init as barber, seed: %d ###\n", getpid(), seed);
     struct msgbuf buf;
-    int cost, *cash_register = (int*)shmat(cash_reg_id, NULL, 0);
+    int cost, *cash_register = (int*)shmat(cash_reg_id, NULL, 0), change_given;
     long cust_id;
 
     while(1){
+        change_given = 0;
         // wait for a customer to arrive - msgrcv
         msgrcv(waiting_room, &buf, 4*sizeof(int), NEW_CUSTOMER, 0);
         cost = rand_r(&seed)%25+4;
         cust_id = buf.mdata[3];
         printf("%d[B]:\tStarting a(n) $%d service for customer %ld\n", getpid(), cost, cust_id);
-        // TODO
         // wait for a free chair
         sem_lower(styling_chairs, 0);
         
@@ -155,7 +155,14 @@ void barber(int seed){
         // usleep(1000);    // for slowing the execution down
         sem_raise(styling_chairs, 0);
         // wait for register access, change and give it (greedy)
-        while(!give_change(cost, cash_register, buf.mdata, cash_access)) {}
+        change_given = give_change(cost, cash_register, buf.mdata, cash_access);
+        // to prevent active wait, only re-check if cash was added to the register
+        while (change_given) {
+            // wait
+            // check
+            change_given = give_change(cost, cash_register, buf.mdata, cash_access);
+            // propagate
+        }
         // let the customer go
         msgsnd(finished_q, &cust_id, 0, 0);
     }
@@ -168,6 +175,7 @@ void customer(int seed){
     struct msqid_ds q_info;     // info about queue (need its length)
     struct msgbuf wait_msg;
     int tmp;
+    // wallet: wait_msg.mdata[0:3]
     for(int i=0;i<3;i++) wait_msg.mdata[i] = 0;
     wait_msg.mdata[3] = getpid();
     wait_msg.mtype = NEW_CUSTOMER;
@@ -192,7 +200,7 @@ void customer(int seed){
             printf("%d[C]:\tEntered the barber's\n", getpid());            
 
             // wait for service and change
-            // todo: 
+            // todo: receive updated contents of the wallet
             msgrcv(finished_q, NULL, 0, (long)getpid(), 0);
         }
         else sem_raise(waiting_door, 0);
@@ -236,7 +244,7 @@ int main(int argc, char* argv[]) {
     semctl(cash_access, 0, SETVAL, 1);
     // put some money to start with
     int *cash_register = (int*)shmat(cash_reg_id, NULL, 0);
-    cash_register[0] = cash_register[1] = 5, cash_register[2] = 0;
+    cash_register[0] = cash_register[1] = cash_register[2] = 0;
 
     // styling chairs: semaphore, because it doesn't matter which chair exactly you use
     styling_chairs = semget(IPC_PRIVATE, seatN, 0640);
@@ -263,15 +271,12 @@ int main(int argc, char* argv[]) {
 }
 
 /*
- may get stuck on:
-    - everyone waits for change
- 
- representations:
-    # waiting room: msg Q
-        - clients identified by PIDs?
-
-    # chairs: a semaphore with max=chairN
-    
-    # cash register: shared memory - no of coins of every value
-        - secured with a semaphore: for both paying and giving change
+ * may get stuck on:
+ *  - everyone waits for change
+ * representations:
+ * # waiting room: msg Q
+ *      - clients identified by PIDs?
+ * # chairs: a semaphore with max=chairN 
+ * # cash register: shared memory - no of coins of every value
+ *      - secured with a semaphore: for both paying and giving change
 */
