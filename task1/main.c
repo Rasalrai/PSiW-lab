@@ -99,6 +99,7 @@ int give_change(int price, int* cash_reg, int* wallet) {
         printf("%d[B]:\t- - - Problem calculating change; %d, %d; %d, %d, %d; %d, %d, %d.\n", getpid(), paid, price, change[0], change[1], change[2], cash_reg[0], cash_reg[1], cash_reg[2]);
         sem_raise(cash_access, 0);
         // exit(1);
+        return 0;
     }
     if (!diff) {
         // take change from the register and put it in the wallet
@@ -164,16 +165,17 @@ void barber(unsigned int seed){
         sem_raise(styling_chairs, 0);
         // wait for register access, change and give it (greedy)
         while(!give_change(cost, cash_register, buf.mdata)) {}
-//        change_given = give_change(cost, cash_register, buf.mdata);
-//        while (!change_given) {      // TODO prevent busywait here: only re-check if cash was added to the register
-//            // wait for more money
-//            // check
-//            change_given = give_change(cost, cash_register, buf.mdata);
-//            // propagate
-//        }
+    //    change_given = give_change(cost, cash_register, buf.mdata);
+    //    while (!change_given) {      // TODO prevent busywait here: only re-check if cash was added to the register
+    //        // wait for more money
+    //        // check
+    //        change_given = give_change(cost, cash_register, buf.mdata);
+    //        // propagate
+    //    }
         // give the customer's wallet back so they can go away
-        buf.mtype = (long)buf.mdata[3];
+        buf.mtype = (long)cust_id;
         msgsnd(finished_q, &buf, 3*sizeof(int), 0);
+        printf("%d[B]:\t### OK ###\n", getpid());
     }
 }
 
@@ -210,6 +212,7 @@ void customer(unsigned int seed){
 
             // wait for service and change
             msgrcv(finished_q, NULL, 3*sizeof(int), (long)getpid(), 0);
+            printf("%d[C]:\t### OK ###\n", getpid());
         }
         else sem_raise(waiting_door, 0);
         printf("%d[C]:\tCan't enter, back to work\n", getpid());
@@ -271,7 +274,7 @@ int main(int argc, char* argv[]) {
         perror("-- Attaching shared memory for cash register --");
         exit(1);
     }
-    cash_register[0] = cash_register[1] = cash_register[2] = 0;
+    cash_register[0] = cash_register[1] = 1, cash_register[2] = 0;
 
     // guarding cash register access
     cash_access = semget(IPC_PRIVATE, 1, 0640);
@@ -309,12 +312,14 @@ int main(int argc, char* argv[]) {
 
     // init barbers
     for(int i=0; i<barbN; i++) {
+        tmp = rand_r(glob_seed);
         if(!fork())
             barber(rand_r(glob_seed));
     }
     
     // init customers
     for(int i=0; i<custN; i++) {
+        tmp = rand_r(glob_seed);
         if(!fork())
             customer(rand_r(glob_seed));
     }
