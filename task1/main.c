@@ -16,9 +16,7 @@
 
 #define NEW_CUSTOMER 1
 
-// TODO error handling (e.g. for sending/receiving messages, creating stuff)
 // TODO prevent busywait if you have time and idea for implementation
-// TODO removing the shared stuff after keyboard interrupt signal
 
 /*
  * argv:
@@ -96,10 +94,9 @@ int give_change(int price, int* cash_reg, int* wallet) {
         }
     }
     if (diff < 0) {
-        printf("%d[B]:\t- - - Problem calculating change; %d, %d; %d, %d, %d; %d, %d, %d.\n", getpid(), paid, price, change[0], change[1], change[2], cash_reg[0], cash_reg[1], cash_reg[2]);
+        printf("Problem calculating change");
         sem_raise(cash_access, 0);
-        // exit(1);
-        return 0;
+        exit(1);
     }
     if (!diff) {
         // take change from the register and put it in the wallet
@@ -107,7 +104,7 @@ int give_change(int price, int* cash_reg, int* wallet) {
             cash_reg[i] -= change[i];
             wallet[i] = change[i];
         }
-            
+
         // close the register
         sem_raise(cash_access, 0);
         printf("%d[B]:\tSuccess giving change.\n", getpid());
@@ -121,11 +118,11 @@ int give_change(int price, int* cash_reg, int* wallet) {
 }
 
 void payday(int* wallet, unsigned int *seed) {
-    // after payday, the customer decides how much money they should take to pay the barber with
-    // TODO may need to adjust the values
+    // // after payday, the customer decides how much money they should take to pay the barber with
+    // may need to adjust the values
     wallet[0] = rand_r(seed)%3;
     wallet[1] = rand_r(seed)%3;
-    wallet[2] = rand_r(seed)%3 + 6;     // assume that the rest of this is spent somewhere else
+    wallet[2] = rand_r(seed)%3 + 6;
 }
 
 
@@ -135,7 +132,7 @@ void payday(int* wallet, unsigned int *seed) {
 void barber(unsigned int seed){
     printf("%d:\t\t### Init as barber, seed: %d ###\n", getpid(), seed);
     struct msgbuf buf;
-    int cost, *cash_register = (int*)shmat(cash_reg_id, NULL, 0), change_given;
+    int cost, *cash_register = (int*)shmat(cash_reg_id, NULL, 0);
     if(cash_register == NULL) {
         perror("-- Attaching shared memory for cash register --");
         exit(1);
@@ -148,31 +145,25 @@ void barber(unsigned int seed){
         cost = rand_r(&seed)%25+5;
         cust_id = buf.mdata[3];
         printf("%d[B]:\tStarting a(n) $%d service for customer %ld\n", getpid(), cost, cust_id);
+        // TODO
         // wait for a free chair
         sem_lower(styling_chairs, 0);
-        
-        // take money to put it in the register
+
+        // take money (alt.: put money in the register)     # SYNC_1 cust <-> barb
         toss_a_coin(buf.mdata, cash_register);
         // todo: send info that more cash is now in register (if someone's been waiting for change, they should check now)
 
         // shave
         printf("%d[B]:\tWorking.\n", getpid());
-        usleep(rand_r(&seed)%10000+10);
+        usleep(rand_r(&seed)%100+10);
 
         // clean the chair
         printf("%d[B]:\tFinished.\n", getpid());
-        sleep(1);    // for slowing the execution down
+        // usleep(1000);    // for slowing the execution down
         sem_raise(styling_chairs, 0);
         // wait for register access, change and give it (greedy)
         while(!give_change(cost, cash_register, buf.mdata)) {}
-    //    change_given = give_change(cost, cash_register, buf.mdata);
-    //    while (!change_given) {      // TODO prevent busywait here: only re-check if cash was added to the register
-    //        // wait for more money
-    //        // check
-    //        change_given = give_change(cost, cash_register, buf.mdata);
-    //        // propagate
-    //    }
-        // give the customer's wallet back so they can go away
+        // let the customer go
         buf.mtype = (long)cust_id;
         msgsnd(finished_q, &buf, 3*sizeof(int), 0);
         printf("%d[B]:\t### OK ###\n", getpid());
@@ -185,18 +176,18 @@ void customer(unsigned int seed){
     printf("%d:\t\t### Init as customer, seed: %d ###\n", getpid(), seed);
     struct msqid_ds q_info;     // info about queue (need its length)
     struct msgbuf wait_msg;
-    int tmp;
+    int worktime;
     // wallet: wait_msg.mdata[0:3]
     for(int i=0;i<3;i++) wait_msg.mdata[i] = 0;
     wait_msg.mdata[3] = getpid();
     wait_msg.mtype = NEW_CUSTOMER;
     while(1){
         // make money
-        tmp = rand_r(&seed)%100000 + 50;
-        usleep(tmp);
+        worktime = rand_r(&seed)%1000 + 50;
+        usleep(worktime);
         // collect your wallet
         payday(wait_msg.mdata, &seed);
-        printf("%d[C]:\tWorked for %d us; wallet: %d, %d, %d\n", getpid(), tmp, wait_msg.mdata[0], wait_msg.mdata[1], wait_msg.mdata[2]);
+        printf("%d[C]:\tWorked for %d us; wallet: %d, %d, %d\n", getpid(), worktime, wait_msg.mdata[0], wait_msg.mdata[1], wait_msg.mdata[2]);
 
         // go to barber and see if there's space for you
         sem_lower(waiting_door, 0);
@@ -204,13 +195,14 @@ void customer(unsigned int seed){
         printf("%d[C]:\tGoing to the barber's\n", getpid());
 
         if(q_info.msg_qnum < waitN) {
+
             // wait for barber     msgsnd
             msgsnd(waiting_room, &wait_msg, 4*sizeof(int), 0);  // waiting for barber "with wallet out"
             sem_raise(waiting_door, 0);     // not sooner, so that noone else can enter before I do
             printf("%d[C]:\tEntered the barber's\n", getpid());
-            // choosing the customer and then the chair is all done by the barber        
 
             // wait for service and change
+            // todo: 
             msgrcv(finished_q, NULL, 3*sizeof(int), (long)getpid(), 0);
             printf("%d[C]:\t### OK ###\n", getpid());
         }
@@ -312,28 +304,15 @@ int main(int argc, char* argv[]) {
 
     // init barbers
     for(int i=0; i<barbN; i++) {
-        tmp = rand_r(glob_seed);
         if(!fork())
             barber(rand_r(glob_seed));
     }
-    
+
     // init customers
     for(int i=0; i<custN; i++) {
-        tmp = rand_r(glob_seed);
         if(!fork())
             customer(rand_r(glob_seed));
     }
 
-    // wait(NULL);
+    wait(NULL);
 }
-
-/*
- * may get stuck on:
- *  - everyone waits for change
- * representations:
- * # waiting room: msg Q
- *      - clients identified by PIDs?
- * # chairs: a semaphore with max=chairN 
- * # cash register: shared memory - no of coins of every value
- *      - secured with a semaphore: for both paying and giving change
-*/
