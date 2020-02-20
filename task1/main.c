@@ -120,8 +120,8 @@ int give_change(int price, int* cash_reg, int* wallet) {
 void payday(int* wallet, unsigned int *seed) {
     // // after payday, the customer decides how much money they should take to pay the barber with
     // may need to adjust the values
-    wallet[0] = rand_r(seed)%3;
-    wallet[1] = rand_r(seed)%3;
+    wallet[0] = rand_r(seed)%4;
+    wallet[1] = rand_r(seed)%4;
     wallet[2] = rand_r(seed)%3 + 6;
 }
 
@@ -216,7 +216,7 @@ void customer(unsigned int seed){
 int main(int argc, char* argv[]) {
     barbN = 7, custN = 12, waitN = 4, seatN = 5;
     // global random, used for seeding all processes' random generators
-    unsigned int rand_seed = time(NULL);
+    unsigned int rand_seed = time(NULL), process_seed;  // to get randomized seeds for all processes, created in main process
     glob_seed = &rand_seed;
 
     switch (argc) {
@@ -304,14 +304,16 @@ int main(int argc, char* argv[]) {
 
     // init barbers
     for(int i=0; i<barbN; i++) {
+        process_seed = rand_r(glob_seed);
         if(!fork())
-            barber(rand_r(glob_seed));
+            barber(process_seed);
     }
 
     // init customers
     for(int i=0; i<custN; i++) {
+        process_seed = rand_r(glob_seed);
         if(!fork())
-            customer(rand_r(glob_seed));
+            customer(process_seed);
     }
 
     wait(NULL);

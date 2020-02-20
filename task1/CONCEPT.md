@@ -2,7 +2,7 @@
 
 ## Zachowanie procesów
 
-### Proces-klient:
+### Proces-klient
 * Zarabia pieniądze
 * Część swojej wypłaty wkłada do portfela
 * Idzie do fryzjera; staje w drzwiach ("blokując" je dla pozostałych wchodzących) aby zobaczyć, czy jest dla niego miejsce w poczekalni.
@@ -13,7 +13,7 @@ W obydwu przypadkach zwalnia drzwi, pozwalając kolejnej osobie wykonać te same
 * Po zakończeniu usługi, klient oczekuje na wydanie reszty przez fryzjera (który to musi najpierw dostać się do wspólnej kasy).
 * W momencie otrzymania reszty, klient opuszcza salon i wykonuje tę pętlę po raz kolejny.
 
-### Proces-fryzjer:
+### Proces-fryzjer
 * Oczekuje na pojawienie się klienta
 * Odbiera od klienta zapłatę
 * Oczekuje na wolny fotel w salonie
@@ -27,7 +27,7 @@ sprawdza czy nie jest pełna, poprzez odczytanie liczby komunikatów które są 
 Aby zapobiec sytuacji w której dwóch klientów wchodzi w jednym momencie, powodując ze w poczekalni znajduje się `pojemność+1` klientów,
 został zastosowany semafor `waiting_door`, strzegący drzwi poczekalni dla osób próbujących do niej wejść.
 
-Komunikaty w `waiting_room` są typu `NEW_CUSTOMER` (1). Ich treść to 4 integery: 3 pierwsze to gotówka która jest przekazywana do fryzjera
+Komunikaty w `waiting_room` są typu `NEW_CUSTOMER` (wartość 1). Ich treść to 4 integery: 3 pierwsze to gotówka która jest przekazywana do fryzjera
 (kolejno ilość monet o nominałach 1, 2 i 5) oraz PID klienta (żeby fryzjer wiedział kogo obsługuje).
 
 ### Wspólna kasa
@@ -57,7 +57,7 @@ Typ tego komunikatu to PID klienta, a jego zawartością jest zwrócona klientow
 
 Istnieje szansa, że w kasie zabraknie monet o nominałach 1 i/lub 2, a nowi klienci nie będą się pojawiać (bo wciąż czekają na resztę lub na fryzjera
 czekającego na resztę), przez co procesy fryzjerów nie będą w stanie wydać reszty i obsłużyć tych klientów, którzy być może przyszliby z drobnymi.
-To zdarzenie jest jednak mało prawdopobodne.
+To zdarzenie jest zazwyczaj mało prawdopobodne, szanse rosną gdy liczba fryzjerów jest mała (np. 2).
 
 ## Busy waiting
 
