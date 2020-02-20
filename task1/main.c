@@ -266,7 +266,7 @@ int main(int argc, char* argv[]) {
         perror("-- Attaching shared memory for cash register --");
         exit(1);
     }
-    cash_register[0] = cash_register[1] = 1, cash_register[2] = 0;
+    cash_register[0] = cash_register[1] = cash_register[2] = 0;
 
     // guarding cash register access
     cash_access = semget(IPC_PRIVATE, 1, 0640);
