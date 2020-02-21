@@ -18,6 +18,19 @@ static int reindeersN = 9, elvesN = 10, elves_min = 3;
 
 void santa_claus() {
     // define signal handlers
+    // including behaviour if a signal comes while another one is being handled
+}
+
+void reindeer_hnd() {
+    // wait for 9 reindeers and send a signal to Santa
+    for(int i = 0; i < reindeersN; i++)
+        pthread_cond_wait();
+    
+    // request Santa
+}
+
+void elf_hnd() {
+    // wait for 3 elves and send a signal to Santa
 }
 
 void reindeer(unsigned int seed) {
@@ -29,6 +42,8 @@ void reindeer(unsigned int seed) {
         usleep(sleep_time);
 
         // wait for Santa
+        pthread_cond_signal();
+
         // returned from Santa's
     }
 }
