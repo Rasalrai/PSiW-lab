@@ -17,16 +17,21 @@ static int reindeersN = 9, elvesN = 10, elves_min = 3;
 // printf("%d[]:\t\n", getpid());
 
 void santa_claus() {
+    // create reindeer/elf handlers for you
+
     // define signal handlers
     // including behaviour if a signal comes while another one is being handled
 }
 
 void reindeer_hnd() {
-    // wait for 9 reindeers and send a signal to Santa
-    for(int i = 0; i < reindeersN; i++)
-        pthread_cond_wait();
+    while(1) {
+        // wait for 9 reindeers and send a signal to Santa
+        for(int i = 0; i < reindeersN; i++)
+            pthread_cond_wait();
+        
+        // request Santa
+    }
     
-    // request Santa
 }
 
 void elf_hnd() {
@@ -74,14 +79,12 @@ int main() {
     // create reindeers and elves
     for(int i=0;i<reindeersN;i++) {
         local_seed = rand_r(&global_seed);
-        if(!fork())
-            pthread_create(NULL, NULL, reindeer, local_seed);
+        pthread_create(NULL, NULL, reindeer, local_seed);
     }
 
     for(int i=0;i<elvesN;i++) {
         local_seed = rand_r(&global_seed);
-        if(!fork())
-            pthread_create(NULL, NULL, elf, local_seed);
+        pthread_create(NULL, NULL, elf, local_seed);
     }
         
 
