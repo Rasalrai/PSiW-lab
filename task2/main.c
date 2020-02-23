@@ -16,13 +16,6 @@ static int reindeersN = 9, elvesN = 10, elves_min = 3;
 // ############################################################
 // printf("%d[]:\t\n", getpid());
 
-void santa_claus() {
-    // create reindeer/elf handlers for you
-
-    // define signal handlers
-    // including behaviour if a signal comes while another one is being handled
-}
-
 void reindeer_hnd() {
     while(1) {
         // wait for 9 reindeers and send a signal to Santa
@@ -38,6 +31,17 @@ void elf_hnd() {
     // wait for 3 elves and send a signal to Santa
 }
 
+// ############################################################
+
+void santa_claus() {
+    // create reindeer/elf handlers for you
+
+    // define signal handlers
+    // including behaviour if a signal comes while another one is being handled
+}
+
+// ############################################################
+
 void reindeer(unsigned int seed) {
     int sleep_time;
     while(1) {
@@ -46,7 +50,7 @@ void reindeer(unsigned int seed) {
         printf("%d[R]:\tSleep for %d\n", getpid(), sleep_time);
         usleep(sleep_time);
 
-        // wait for Santa
+        // send signal to handler and wait for Santa
         pthread_cond_signal();
 
         // returned from Santa's
@@ -74,7 +78,6 @@ int main() {
 
     // create Santa thread
 
-    // create handler threads
 
     // create reindeers and elves
     for(int i=0;i<reindeersN;i++) {
