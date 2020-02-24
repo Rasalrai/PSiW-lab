@@ -91,10 +91,12 @@ void *h_hnd(void *arguments) {
 
 void *o_hnd(void *arguments) {
     struct args_t args = *((struct args_t*)arguments);
-    // atom mutex down
-    // receive atoms
-    // counter mutex down and update counter
-    // send info to master
+    while(1) {
+        // atom mutex down
+        // receive atoms
+        // counter mutex down and update counter
+        // send info to master
+    }
 }
 
 // ############################################################
@@ -120,7 +122,7 @@ void *water_assembler(void *arguments) {
 
 int main(int argc, char* argv[]) {
     // init stuff
-    unsigned int global_seed = time(NULL), local_seed;
+    unsigned int global_seed = time(NULL);
     int h_prod_n, o_prod_n;
     
     pthread_cond_t h_ready_v = PTHREAD_COND_INITIALIZER;
@@ -219,10 +221,10 @@ int main(int argc, char* argv[]) {
     }
 
     for(int i = 0; i < h_prod_n; i++)
-        pthread_join(h_prod_th+i, NULL);
+        pthread_join(h_prod_th[i], NULL);
 
     for(int i = 0; i < o_prod_n; i++)
-        pthread_join(o_prod_th+i, NULL);
+        pthread_join(o_prod_th[i], NULL);
 
     return 0;
 }
