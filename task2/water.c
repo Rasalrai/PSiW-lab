@@ -42,6 +42,7 @@ struct args_t {
 
 pthread_cond_t *h_ready, *o_ready, *atom, *h_unlock, *o_unlock;
 pthread_mutex_t *h_mut, *o_mut, *counter_mut;
+pthread_cond_t h_continue = PTHREAD_COND_INITIALIZER, o_continue = PTHREAD_COND_INITIALIZER;
 int *h_count, *o_count;
 
 // ############################################################
@@ -53,12 +54,12 @@ void *h_producer(void *arguments) {
         // create an atom
         usleep(rand_r(&(args.seed))%1000+100);
         printf("%d:\tH atom created\n", args.id);
-
         // atom mutex
         pthread_mutex_lock(h_mut);
         // deliver it
         pthread_cond_signal(h_ready);
-        // TODO wait for assembler
+        // wait for assembler
+        pthread_cond_wait(&h_continue, NULL);
     }
 }
 
@@ -76,6 +77,7 @@ void *h_hnd(void *arguments) {
         // h mutex locked
         pthread_mutex_lock(counter_mut);
         pthread_cond_wait(h_ready, counter_mut);
+        printf("%d:\tH atom \n", args.id);
         (*h_count)++;
         pthread_mutex_unlock(counter_mut);
         pthread_cond_signal(atom);
@@ -113,6 +115,9 @@ void *water_assembler(void *arguments) {
             *o_count -= 1;
             printf("###\t H2O MOLECULE PRODUCED\t###");
             // unlock producers
+            pthread_cond_signal(&h_continue);
+            pthread_cond_signal(&h_continue);
+            pthread_cond_signal(&o_continue);
         }
         pthread_mutex_unlock(counter_mut);
     }
@@ -148,7 +153,7 @@ int main(int argc, char* argv[]) {
     pthread_mutex_unlock(o_mut);
     pthread_mutex_unlock(counter_mut);
 
-    int h_count_v = 0, o_count_v = 0;
+    int h_count_v = 0, o_count_v = 2;       // TODO for testing
     h_count = &h_count_v;
     o_count = &o_count_v;
 
@@ -178,7 +183,7 @@ int main(int argc, char* argv[]) {
         args_tab[i].id = i;
         args_tab[i].seed = rand_r(&global_seed);
     }
-
+ 
     int id = 0;
     // master - water assembler
     printf("ID %d:\tWater assembler\n", id);
