@@ -1,16 +1,10 @@
 // ZADANIE 2: Producenci wody
 
-/*  TODO
-    error handling on e.g. thread creation
-    make sure that the handlers and the master don't miss any signal
-    more logging
-    make arrays/structs for threads' args
-*/
-
 /*
     argv
     [1] no of Hydrogen producers (>=2)
     [2] no of Oxygen producers (>=1)
+
     Incorrect values will cause the program to fail.
     If values are not provided, they will be chosen at random (each max 10)
 */
@@ -26,15 +20,6 @@
 #include <time.h>
 #include <string.h>
 
-/*
-struct thread_t {
-    pthread_t pth_id;
-    void *func;
-    int id;
-    unsigned int seed;
-};
-*/
-
 struct args_t {
     int id;
     unsigned int seed;
@@ -45,7 +30,6 @@ pthread_mutex_t create_water = PTHREAD_MUTEX_INITIALIZER;
 int h_count = 0, o_count = 0, h_used = 0, o_used = 0;
 
 // ############################################################
-// printf("%d[]:\t\n", id);
 
 void *h_producer(void *arguments) {
     struct args_t args = *((struct args_t*)arguments);
@@ -72,17 +56,21 @@ void *h_producer(void *arguments) {
                 pthread_cond_wait(&h_wait, &create_water);
             }
         }
-        h_used--;  // this atom is used 
+        // every atom used is substracted
+        h_used--;
+
         pthread_mutex_unlock(&create_water);
         // end of critical section
     }
 }
 
+// ------------------------------------------------------
+
 void *o_producer(void *arguments) {
     struct args_t args = *((struct args_t*)arguments);
     while(1) {
         // create an atom
-        usleep(rand_r(&(args.seed))%2000+100);
+        usleep(rand_r(&(args.seed))%1000+100);
         printf("%d:\tO atom created\n", args.id);
 
         // critical section
@@ -137,7 +125,7 @@ int main(int argc, char* argv[]) {
 
     pthread_t h_prod_th[h_prod_n], o_prod_th[o_prod_n];
 
-    // create threads
+    
     // thread arguments
     int threads_n = h_prod_n + o_prod_n + 3;
     struct args_t args_tab[threads_n];
@@ -146,8 +134,8 @@ int main(int argc, char* argv[]) {
         args_tab[i].seed = rand_r(&global_seed);
     }
  
+    // create threads
     int id = 0;
-    // atom producers
     printf("ID %d - %d:\tHydrogen producers\n", id, id+h_prod_n-1);
     for(int i = 0; i < h_prod_n; i++) {
         if(pthread_create(&h_prod_th[i], NULL, h_producer, args_tab+id)) {

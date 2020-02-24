@@ -1,5 +1,15 @@
 // ZADANIE 1: Spiacy fryzjerzy-kasjerzy
 
+/*
+ * argv:
+ *  [1]: no of barbers      (barbN)
+ *  [2]: no of customers    (custN)
+ *  [3]: no of seats        (seatN)
+ *  [4]: waiting room size  (waitN)
+ *  [5]: seed for random generator  (*seed)
+ * */
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -16,17 +26,6 @@
 #include <sched.h>
 
 #define NEW_CUSTOMER 1
-
-// TODO prevent busywait if you have time and idea for implementation
-
-/*
- * argv:
- *  [1]: no of barbers      (barbN)
- *  [2]: no of customers    (custN)
- *  [3]: no of seats        (seatN)
- *  [4]: waiting room size  (waitN)
- *  [5]: seed for random generator  (*seed)
- * */
 
 struct msgbuf {
     long mtype;
@@ -59,6 +58,8 @@ void sem_lower(int sem_id, int sem_num) {
         exit(1);
     }
 }
+
+// ############################################################
 
 void toss_a_coin(const int* coins, int* cash) {
     /* toss the coins to the cash register */
@@ -126,9 +127,7 @@ void payday(int* wallet, unsigned int *seed) {
     wallet[2] = rand_r(seed)%3 + 6;
 }
 
-
 // ############################################################
-// printf("%d[]:\t\n", getpid());
 
 void barber(unsigned int seed){
     printf("%d:\t\t### Init as barber, seed: %d ###\n", getpid(), seed);
