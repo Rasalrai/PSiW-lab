@@ -13,6 +13,7 @@
 
 #include <time.h>
 #include <string.h>
+#include <sched.h>
 
 #define NEW_CUSTOMER 1
 
@@ -118,7 +119,7 @@ int give_change(int price, int* cash_reg, int* wallet) {
 }
 
 void payday(int* wallet, unsigned int *seed) {
-    // // after payday, the customer decides how much money they should take to pay the barber with
+    // after payday, the customer decides how much money they should take to pay the barber with
     // may need to adjust the values
     wallet[0] = rand_r(seed)%4;
     wallet[1] = rand_r(seed)%4;
@@ -162,7 +163,8 @@ void barber(unsigned int seed){
         // usleep(1000);    // for slowing the execution down
         sem_raise(styling_chairs, 0);
         // wait for register access, change and give it (greedy)
-        while(!give_change(cost, cash_register, buf.mdata)) {}
+        while (!give_change(cost, cash_register, buf.mdata))
+            sched_yield();      // 
         // let the customer go
         buf.mtype = (long)cust_id;
         msgsnd(finished_q, &buf, 3*sizeof(int), 0);

@@ -40,10 +40,9 @@ struct args_t {
     unsigned int seed;
 };
 
-pthread_cond_t *h_ready, *o_ready, *atom, *h_unlock, *o_unlock;
-pthread_mutex_t *h_mut, *o_mut, *counter_mut;
-pthread_cond_t h_continue = PTHREAD_COND_INITIALIZER, o_continue = PTHREAD_COND_INITIALIZER;
-int *h_count, *o_count;
+pthread_cond_t h_wait = PTHREAD_COND_INITIALIZER, o_wait = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t create_water = PTHREAD_MUTEX_INITIALIZER;
+int h_count = 0, o_count = 0, h_used = 0, o_used = 0;
 
 // ############################################################
 // printf("%d[]:\t\n", id);
@@ -54,72 +53,60 @@ void *h_producer(void *arguments) {
         // create an atom
         usleep(rand_r(&(args.seed))%1000+100);
         printf("%d:\tH atom created\n", args.id);
-        // atom mutex
-        pthread_mutex_lock(h_mut);
-        // deliver it
-        pthread_cond_signal(h_ready);
-        // wait for assembler
-        pthread_cond_wait(&h_continue, NULL);
+
+        // critical section
+        pthread_mutex_lock(&create_water);
+        h_count++;
+        while(!h_used) {
+            if(h_count >=2 && o_count >= 1) {
+                // can make water
+                h_count -= 2;
+                o_count--;
+                h_used += 2;
+                o_used++;
+                printf("%d\t###\tH2O MOLECULE PRODUCED\t###\n", args.id);
+                pthread_cond_signal(&h_wait);
+                pthread_cond_signal(&o_wait);
+            } else {
+                // wait for someone else to make water
+                pthread_cond_wait(&h_wait, &create_water);
+            }
+        }
+        h_used--;  // this atom is used 
+        pthread_mutex_unlock(&create_water);
+        // end of critical section
     }
 }
 
 void *o_producer(void *arguments) {
     struct args_t args = *((struct args_t*)arguments);
     while(1) {
+        // create an atom
+        usleep(rand_r(&(args.seed))%2000+100);
+        printf("%d:\tO atom created\n", args.id);
 
-    }
-    // pass
-}
-
-void *h_hnd(void *arguments) {
-    struct args_t args = *((struct args_t*)arguments);
-    while(1) {
-        // h mutex locked
-        pthread_mutex_lock(counter_mut);
-        pthread_cond_wait(h_ready, counter_mut);
-        printf("%d:\tH atom \n", args.id);
-        (*h_count)++;
-        pthread_mutex_unlock(counter_mut);
-        pthread_cond_signal(atom);
-        pthread_mutex_unlock(h_mut);
-    }
-    // atom mutex down
-    // receive atoms
-
-
-    // counter mutex down and update counter
-    // send info to master
-}
-
-void *o_hnd(void *arguments) {
-    struct args_t args = *((struct args_t*)arguments);
-    while(1) {
-        // atom mutex down
-        // receive atoms
-        // counter mutex down and update counter
-        // send info to master
-    }
-}
-
-// ############################################################
-
-void *water_assembler(void *arguments) {
-    struct args_t args = *((struct args_t*)arguments);
-    while(1) {
-        // wait for info from slaves/handlers
-        pthread_mutex_lock(counter_mut);
-        pthread_cond_wait(atom, counter_mut);
-
-        if (*h_count >= 2 && *o_count >= 1) {
-            *h_count -= 2;
-            *o_count -= 1;
-            printf("###\t H2O MOLECULE PRODUCED\t###");
-            // unlock producers
-            pthread_cond_signal(&h_continue);
-            pthread_cond_signal(&h_continue);
-            pthread_cond_signal(&o_continue);
+        // critical section
+        pthread_mutex_lock(&create_water);
+        o_count++;
+        while(!o_used) {       // if someone has already put a molecule together (and put you there), skip this
+            if(h_count >=2 && o_count >= 1) {
+                // can make water
+                h_count -= 2;
+                o_count--;
+                h_used += 2;
+                o_used++;
+                printf("%d\t###\tH2O MOLECULE PRODUCED\t###\n", args.id);
+                // wake up producers waiting in the else
+                pthread_cond_signal(&h_wait);
+                pthread_cond_signal(&h_wait);
+            } else {
+                // wait for someone else to make water
+                pthread_cond_wait(&o_wait, &create_water);
+            }
         }
-        pthread_mutex_unlock(counter_mut);
+        o_used--;  // this atom is used
+        pthread_mutex_unlock(&create_water);
+        // end of critical section
     }
 }
 
@@ -129,33 +116,9 @@ int main(int argc, char* argv[]) {
     // init stuff
     unsigned int global_seed = time(NULL);
     int h_prod_n, o_prod_n;
-    
-    pthread_cond_t h_ready_v = PTHREAD_COND_INITIALIZER;
-    pthread_cond_t o_ready_v = PTHREAD_COND_INITIALIZER;
-    pthread_cond_t atom_v = PTHREAD_COND_INITIALIZER;
-    pthread_cond_t h_unlock_v = PTHREAD_COND_INITIALIZER;
-    pthread_cond_t o_unlock_v = PTHREAD_COND_INITIALIZER;
-    h_ready = &h_ready_v;
-    o_ready = &o_ready_v;
-    atom = &atom_v;
-    h_unlock = &h_unlock_v;
-    o_unlock = &o_unlock_v;
 
-    pthread_mutex_t h_mut_v = PTHREAD_MUTEX_INITIALIZER;
-    pthread_mutex_t o_mut_v = PTHREAD_MUTEX_INITIALIZER;
-    pthread_mutex_t counter_mut_v = PTHREAD_MUTEX_INITIALIZER;
-    h_mut = &h_mut_v;
-    o_mut = &o_mut_v;
-    counter_mut = &counter_mut_v;
-
-    // make sure that mutexes are unlocked
-    pthread_mutex_unlock(h_mut);
-    pthread_mutex_unlock(o_mut);
-    pthread_mutex_unlock(counter_mut);
-
-    int h_count_v = 0, o_count_v = 2;       // TODO for testing
-    h_count = &h_count_v;
-    o_count = &o_count_v;
+    // make sure that the mutex is unlocked
+    pthread_mutex_unlock(&create_water);
 
     // args
     if(argc > 1) {
@@ -173,7 +136,6 @@ int main(int argc, char* argv[]) {
     printf("Starting execution: %d hydrogen producers, %d oxygen producers.\n", h_prod_n, o_prod_n);
 
     pthread_t h_prod_th[h_prod_n], o_prod_th[o_prod_n];
-    pthread_t water_th, h_hnd_th, o_hnd_th;
 
     // create threads
     // thread arguments
@@ -185,28 +147,6 @@ int main(int argc, char* argv[]) {
     }
  
     int id = 0;
-    // master - water assembler
-    printf("ID %d:\tWater assembler\n", id);
-    if(pthread_create(&water_th, NULL, water_assembler, args_tab+id)) {
-        perror("Create thread");
-        exit(1);
-    }
-    id++;
-
-    // H and O handlers
-    printf("ID %d:\tHydrogen handler\n", id);
-    if(pthread_create(&h_hnd_th, NULL, h_hnd, args_tab+id)) {
-        perror("Create thread");
-        exit(1);
-    }
-    id++;
-    printf("ID %d:\tOxygen handler\n", id);
-    if(pthread_create(&o_hnd_th, NULL, o_hnd, args_tab+id)) {
-        perror("Create thread");
-        exit(1);
-    }
-    id++;
-
     // atom producers
     printf("ID %d - %d:\tHydrogen producers\n", id, id+h_prod_n-1);
     for(int i = 0; i < h_prod_n; i++) {
@@ -233,9 +173,3 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-
-/*
-    H Hydrogen producers, O Oxygen producers
-    2 processes for couting incoming molecules (of either type)
-    water assembler: locks H and O counters, decreases them and outputs a water molecule
-*/
