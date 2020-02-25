@@ -6,8 +6,8 @@
 * Zarabia pieniądze
 * Część swojej wypłaty wkłada do portfela
 * Idzie do fryzjera; staje w drzwiach ("blokując" je dla pozostałych wchodzących) aby zobaczyć, czy jest dla niego miejsce w poczekalni.
-Jeśli tak, zajmuje je (wysyłając komunikat do kolejki), jednocześnie przekazując za ść portfela fryzjerowi; w przeciwnym wypadku wraca do pracy.
-W obydwu przypadkach zwalnia drzwi, pozwalając kolejnej osobie wykonać te same czynności.
+Jeśli tak, zajmuje je (wysyłając komunikat do kolejki), jednocześnie przekazując zawartość portfela fryzjerowi; w przeciwnym wypadku wraca do pracy.
+W obydwu przypadkach zwalnia semafor-drzwi, pozwalając kolejnej osobie wykonać te same czynności.
 * Z punktu widzenia klienta, nie ma znaczenia moment rozpoczęcia usługi przez fryzjera
 (gdyz jego stan nie zmienia się podczas jej rozpoczęcia, nie może np. w żadnym momencie przerwać czekania i zrezygnować).
 * Po zakończeniu usługi, klient oczekuje na wydanie reszty przez fryzjera (który to musi najpierw dostać się do wspólnej kasy).
@@ -15,8 +15,11 @@ W obydwu przypadkach zwalnia drzwi, pozwalając kolejnej osobie wykonać te same
 
 ### Proces-fryzjer
 * Oczekuje na pojawienie się klienta
-* Odbiera od klienta zapłatę
+* Odbiera od klienta zapłatę i umieszcza ją w kasie
 * Oczekuje na wolny fotel w salonie
+* Wykonuje usługę
+* Oczekuje na dostęp do kasy, aby wydać resztę (próbuje do skutku)
+* Wydaje resztę klientowi i idzie po następnego klienta.
 
 
 ## Uzyte mechanizmy komunikacji i synchronizacji
@@ -28,7 +31,7 @@ Aby zapobiec sytuacji w której dwóch klientów wchodzi w jednym momencie, powo
 został zastosowany semafor `waiting_door`, strzegący drzwi poczekalni dla osób próbujących do niej wejść.
 
 Komunikaty w `waiting_room` są typu `NEW_CUSTOMER` (wartość 1). Ich treść to 4 integery: 3 pierwsze to gotówka która jest przekazywana do fryzjera
-(kolejno ilość monet o nominałach 1, 2 i 5) oraz PID klienta (żeby fryzjer wiedział kogo obsługuje).
+(kolejno ilość monet o nominałach 1, 2 i 5) oraz PID klienta (żeby fryzjer wiedział kogo obsługuje i komu później wydać resztę).
 
 ### Wspólna kasa
 Zawartość kasy jest reprezentowana przez segment pamięci współdzielonej pomiędzy procesami fryzjerów `cash_reg_id`. Ma ona trzy "przegródki",
@@ -39,7 +42,7 @@ Kasa jest używana przez fryzjera dwukrotnie przy obsłudze każdego z klientów
 które umieszcza w kasie, a po jej zakończeniu wydaje z jej zawartości resztę, co jest realizowane prostym algorytmem zachłannym,
 używanym przez większość kasjerek i kasjerów.
 Wydawanie reszty może się ono nie udać w przypadku gdy w kasie nie ma monet o odpowiednim nominale (np. w kasie są tylko monety o nominale 5,
-a należy wydać resztę równą 2). W takim wypadku próby wydania reszty są ponawiane bez skutku, w nadziei że pojawi się więcej drobnych.
+a należy wydać resztę równą 2). W takim wypadku próby wydania reszty są ponawiane do skutku, w nadziei że pojawi się więcej drobnych.
 
 ### Fotele fryzjerskie
 
@@ -64,8 +67,9 @@ To zdarzenie jest zazwyczaj mało prawdopobodne, szanse rosną gdy liczba fryzje
 Jeśli w kasie brakuje odpowiednich nominałów, procesy fryzjerów będą bez przerwy sprawdzać czy mogą już wydać resztę, nawet jeśli w kasie
 nie pojawiły się nowe monety.
 
-### Pomysł na rozwiązanie tego problemu z użyciem mechanizmów `pthread` (niezaimplementowany)
+### Pomysł na rozwiązanie tego problemu z użyciem mechanizmów `pthread`
 
 Po włożeniu pieniędzy od klienta, fryzjer wysyła sygnał `pthread_cond_signal` który zostanie odebrany przez jeden z procesów oczekujących na drobne
 (lub zignorowany jeśli takich procesów nie ma). Proces który ten sygnał odbierze, spróbuje ponownie wydać resztę, po czym wyśle taki sam komunikat
-(niezależnie czy próba była udana czy nie), aby pozostałe procesy również mogły ponowić tą próbę.
+(niezależnie czy próba była udana czy nie), aby pozostałe procesy również mogły ponowić tą próbę. Procesy oczekujące na ten sygnał, zwalniają swoją
+blokadę na `cash_access`.
