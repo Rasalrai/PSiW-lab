@@ -26,3 +26,5 @@ Jeśli niektóre (lub żadne) argumenty nie zostaną podane, użyte będą warto
 `F = 7, K = 12, N = 4, P = 5`
 
 Poprawność argumentów (`K, N, P > 0`, `F > 1`, `N < F`) nie jest sprawdzana.
+
+**Uwaga** Program wypisuje dużo na standardowe wyjście (loguje operacje wszystkich procesów).

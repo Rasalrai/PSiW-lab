@@ -1,5 +1,5 @@
 # Kompilacja
-
+Uruchom w katalogu `zad2`:
 ```
 gcc water.c -Wall -pthread -o water.out
 ```
@@ -21,3 +21,5 @@ O: liczba wątków-producentów tlenu.
 
 Jeśli te argumenty nie zostaną podane, zostaną wylosowane wartości: `2 <= H <= 10`, `1 <= O <= 10`.
 Jeśli zostaną podane wartości `H < 2` lub `O < 1`, wykonywanie programu zakończy się błędem.
+
+**Uwaga** Program wypisuje dużo na standardowe wyjście (loguje operacje wszystkich procesów).
