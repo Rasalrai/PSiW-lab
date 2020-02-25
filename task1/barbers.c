@@ -6,9 +6,7 @@
  *  [2]: no of customers    (custN)
  *  [3]: no of seats        (seatN)
  *  [4]: waiting room size  (waitN)
- *  [5]: seed for random generator  (*seed)
  * */
-
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -144,22 +142,20 @@ void barber(unsigned int seed){
         msgrcv(waiting_room, &buf, 4*sizeof(int), NEW_CUSTOMER, 0);
         cost = rand_r(&seed)%25+5;
         cust_id = buf.mdata[3];
+
         printf("%d[B]:\tStarting a(n) $%d service for customer %ld\n", getpid(), cost, cust_id);
-        // TODO
         // wait for a free chair
         sem_lower(styling_chairs, 0);
 
-        // take money (alt.: put money in the register)     # SYNC_1 cust <-> barb
+        // put money in the register
         toss_a_coin(buf.mdata, cash_register);
-        // todo: send info that more cash is now in register (if someone's been waiting for change, they should check now)
 
         // shave
         printf("%d[B]:\tWorking.\n", getpid());
         usleep(rand_r(&seed)%100+10);
 
-        // clean the chair
-        printf("%d[B]:\tFinished.\n", getpid());
-        // usleep(1000);    // for slowing the execution down
+        // "clean" the chair
+        printf("%d[B]:\tCleaning the chair.\n", getpid());
         sem_raise(styling_chairs, 0);
         // wait for register access, change and give it (greedy)
         while (!give_change(cost, cash_register, buf.mdata))
@@ -167,7 +163,7 @@ void barber(unsigned int seed){
         // let the customer go
         buf.mtype = (long)cust_id;
         msgsnd(finished_q, &buf, 3*sizeof(int), 0);
-        printf("%d[B]:\t### OK ###\n", getpid());
+        printf("%d[B]:\t### Finished service and giving change. ###\n", getpid());
     }
 }
 
@@ -197,15 +193,14 @@ void customer(unsigned int seed){
 
         if(q_info.msg_qnum < waitN) {
 
-            // wait for barber     msgsnd
-            msgsnd(waiting_room, &wait_msg, 4*sizeof(int), 0);  // waiting for barber "with wallet out"
+            // wait for a barber
+            msgsnd(waiting_room, &wait_msg, 4*sizeof(int), 0);  // waiting for a barber with your wallet ready
             sem_raise(waiting_door, 0);     // not sooner, so that noone else can enter before I do
             printf("%d[C]:\tEntered the barber's\n", getpid());
 
             // wait for service and change
-            // todo: 
             msgrcv(finished_q, NULL, 3*sizeof(int), (long)getpid(), 0);
-            printf("%d[C]:\t### OK ###\n", getpid());
+            printf("%d[C]:\t### Leaving the barber's ###\n", getpid());
         }
         else sem_raise(waiting_door, 0);
         printf("%d[C]:\tCan't enter, back to work\n", getpid());
@@ -217,13 +212,11 @@ void customer(unsigned int seed){
 int main(int argc, char* argv[]) {
     barbN = 7, custN = 12, waitN = 4, seatN = 5;
     // global random, used for seeding all processes' random generators
-    unsigned int rand_seed = time(NULL), process_seed;  // to get randomized seeds for all processes, created in main process
+    unsigned int rand_seed = time(NULL), process_seed;  // to get randomized seeds for all processes, created in the main process
     glob_seed = &rand_seed;
 
     switch (argc) {
         default:
-        case 6:
-            *glob_seed = strtol(argv[5], NULL, 10);
         case 5:
             waitN = strtol(argv[4], NULL, 10);
         case 4:
@@ -279,9 +272,6 @@ int main(int argc, char* argv[]) {
         perror("-- Setting value of semaphore for cash register access --");
         exit(1);
     }
-
-    // msgq to prevent busywait if giving change is not possible
-    // money_q = msgget(IPC_PRIVATE, 0640);
 
     // styling chairs: semaphore, because it doesn't matter which chair exactly you use
     styling_chairs = semget(IPC_PRIVATE, (int)seatN, 0640);
