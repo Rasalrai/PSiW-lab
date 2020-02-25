@@ -27,7 +27,7 @@ struct args_t {
 
 pthread_cond_t h_wait = PTHREAD_COND_INITIALIZER, o_wait = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t create_water = PTHREAD_MUTEX_INITIALIZER;
-int h_count = 0, o_count = 0, h_used = 0, o_used = 0;
+int h_count = 0, o_count = 0, h_needed = 0, o_needed = 0;
 
 // ############################################################
 
@@ -41,13 +41,13 @@ void *h_producer(void *arguments) {
         // critical section
         pthread_mutex_lock(&create_water);
         h_count++;
-        while(!h_used) {
-            if(h_count >=2 && o_count >= 1) {
+        while (!h_needed) {
+            if (h_count >=2 && o_count >= 1) {
                 // can make water
                 h_count -= 2;
                 o_count--;
-                h_used += 2;
-                o_used++;
+                h_needed += 2;
+                o_needed++;
                 printf("%d\t###\tH2O MOLECULE PRODUCED\t###\n", args.id);
                 pthread_cond_signal(&h_wait);
                 pthread_cond_signal(&o_wait);
@@ -57,7 +57,7 @@ void *h_producer(void *arguments) {
             }
         }
         // every atom used is substracted
-        h_used--;
+        h_needed--;
 
         pthread_mutex_unlock(&create_water);
         // end of critical section
@@ -76,13 +76,13 @@ void *o_producer(void *arguments) {
         // critical section
         pthread_mutex_lock(&create_water);
         o_count++;
-        while(!o_used) {       // if someone has already put a molecule together (and put you there), skip this
+        while(!o_needed) {       // if someone has already put a molecule together (and put you there), skip this
             if(h_count >=2 && o_count >= 1) {
                 // can make water
                 h_count -= 2;
                 o_count--;
-                h_used += 2;
-                o_used++;
+                h_needed += 2;
+                o_needed++;
                 printf("%d\t###\tH2O MOLECULE PRODUCED\t###\n", args.id);
                 // wake up producers waiting in the else
                 pthread_cond_signal(&h_wait);
@@ -92,7 +92,7 @@ void *o_producer(void *arguments) {
                 pthread_cond_wait(&o_wait, &create_water);
             }
         }
-        o_used--;  // this atom is used
+        o_needed--;  // this atom is used
         pthread_mutex_unlock(&create_water);
         // end of critical section
     }
