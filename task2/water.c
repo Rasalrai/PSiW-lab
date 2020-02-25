@@ -76,7 +76,7 @@ void *o_producer(void *arguments) {
         // critical section
         pthread_mutex_lock(&create_water);
         o_count++;
-        while(!o_needed) {       // if someone has already put a molecule together (and put you there), skip this
+        while(!o_needed) {      // existing or new molecule
             if(h_count >=2 && o_count >= 1) {
                 // can make water
                 h_count -= 2;
@@ -125,7 +125,6 @@ int main(int argc, char* argv[]) {
 
     pthread_t h_prod_th[h_prod_n], o_prod_th[o_prod_n];
 
-    
     // thread arguments
     int threads_n = h_prod_n + o_prod_n + 3;
     struct args_t args_tab[threads_n];
