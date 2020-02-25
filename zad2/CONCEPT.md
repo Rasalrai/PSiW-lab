@@ -46,7 +46,6 @@ dołącz do istniejącej cząsteczki > utwórz nową cząsteczkę > czekaj na ut
 # Użyte mechanizmy synchronizacji
 
 W programie jest jedna sekcja krytyczna, wspólna dla wszystkich producentów, więc potrzebny jest jeden mutex `create_water` strzegący do niej dostępu. Poza tym,
-dwie zmienne warunkowe `h_wait` i `o_wait` pozwalają na znaczne zmniejszenie częstotliwości ponownych wejść wątków do sekcji krytycznej: wątek zostaje
-uaktywniony tylko wtedy, gdy jest szansa na wykorzystanie atomu, który on wyprodukował. Nie oznacza to, że zawsze po odebraniu tego sygnału będzie w stanie zakończyć
+dwie zmienne warunkowe `h_wait` i `o_wait` pozwalają na znaczne zmniejszenie częstotliwości ponownych wejść wątków do sekcji krytycznej: wątek, który zawiesił wykonywanie sekcji krytycznej wraca do niej tylko wtedy, gdy jest szansa na wykorzystanie atomu, który on wyprodukował. Nie oznacza to, że zawsze po odebraniu tego sygnału będzie w stanie zakończyć
 sekcję krytyczną (dlatego pętla `while (!h_needed)`, a nie warunek `if (!h_needed)`), gdyż być może wcześniej został wyprodukowany nowy atom potrzebnego
 pierwiastka, który został użyty do budowy cząsteczki wody w pierwszym wejściu producenta do sekcji krytycznej.
