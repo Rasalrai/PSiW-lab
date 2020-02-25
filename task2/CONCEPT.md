@@ -7,27 +7,26 @@ oraz następnie "składanie" ich w cząsteczki wody.
 
 Produkcja atomu zabiera losową, niezerową i skończoną ilość czasu.
 
-Łączenie atomów w cząsteczki wody jest sekcją krytyczną, więc może być wykonywane jednocześnie przez maksymalnie jeden wątek.
+Łączenie atomów w cząsteczki wody odbywa się w sekcji krytycznej, więc może być wykonywane jednocześnie przez maksymalnie jeden wątek.
 
 ## Tworzenie cząsteczek
 
-Po wytworzeniu atomu, producent wchodzi do sekcji krytycznej. __Aby opisać działanie bardziej obrazowo, skupię się na konkretnych działaniach producenta wodoru,
-lecz producenci tlenu działają analogicznie.__
+Po wytworzeniu atomu, producent wchodzi do sekcji krytycznej. __Aby opisać działanie bardziej obrazowo,
+skupię się na konkretnych działaniach producenta wodoru. Producenci tlenu działają analogicznie.__
 
 Producent informuje o wyprodukowaniu atomu, inkrementując licznik wolnych atomów wodoru. Następnie, podejmuje próbę utworzenia cząsteczki z dostępnych atomów
 lub dołączenia swojego tworu do obecnie kompletowanej cząsteczki:
 
-* jeśli do zbudowania obecnie tworzonych cząsteczek (lub cząsteczki) nie potrzeba więcej atomów wodoru, sprawdza czy jest w stanie rozpocząć tworzenie kolejnej cząsteczki:
-czy liczba wolnych atomów jest do tego wystarczająca:
+* jeśli do zbudowania obecnie tworzonych cząsteczek (lub cząsteczki) nie potrzeba więcej atomów wodoru, sprawdza czy jest w stanie rozpocząć tworzenie kolejnej cząsteczki, czyli czy liczba wolnych atomów jest do tego wystarczająca:
   * jeśli tak, "przenosi" 2 atomy wodoru i atom tlenu do licznika atomów potrzebnych, które wejdą w skład obecnie kompletowanych cząsteczek.
 Wysyła więc sygnał do jednego producenta tlenu i jednego producenta wodoru, aby mogli dołączyć swoje atomy do cząsteczki którą on stworzył.
-W tym momencie cząsteczkę uznaję za stworzoną, choć nie wiemy jeszcze które dokładnie atomy wejdą w jej skład. Przed opuszczeniem sekcji krytycznej
-zaznacza użycie swojego atomu, dekrementując licznik potrzebnych atomów wodoru.
+W tym momencie cząsteczkę uznajemy za stworzoną. Przed opuszczeniem sekcji krytycznej
+zaznacza użycie swojego atomu do budowy cząsteczki, dekrementując licznik potrzebnych atomów wodoru.
   * jeśli nie ma wystarczającej ilości wolnych atomów, zawiesza wykonywanie sekcji krytycznej, oczekując na sygnał od producenta który rozpocznie tworzenie
 cząstki wody. Gdy wznowi jej wykonanie, upewnia się czy atom w jego buforze jest wciąż potrzebny: wtedy usuwa swój atom z atomów potrzebnych, odzwierciedlając
 ten stan licznikiem. Jeśli nie, pewnie próbuje utworzyć nową cząsteczkę.
 
-* jeśli potrzeba atomów wodoru, producent nie próbuje tworzyć nowej cząsteczki, lecz po prostu używa swoją aby uzupełnić inną, obecnie tworzoną.
+* jeśli potrzeba atomów wodoru, producent nie próbuje tworzyć nowej cząsteczki, lecz po prostu używa swoją aby uzupełnić inną, obecnie tworzoną cząsteczkę.
 
 Po zakończeniu wykonywania całej sekcji krytycznej, producent rozpoczyna cykl produkcji od nowa.
 
@@ -48,6 +47,6 @@ dołącz do istniejącej cząsteczki > utwórz nową cząsteczkę > czekaj na ut
 
 W programie jest jedna sekcja krytyczna, wspólna dla wszystkich producentów, więc potrzebny jest jeden mutex `create_water` strzegący do niej dostępu. Poza tym,
 dwie zmienne warunkowe `h_wait` i `o_wait` pozwalają na znaczne zmniejszenie częstotliwości ponownych wejść wątków do sekcji krytycznej: wątek zostaje
-uaktywniony tylko wtedy, gdy jest potrzebny atom, który on wyprodukował. Nie oznacza to, że zawsze po odebraniu tego sygnału będzie w stanie zakończyć
+uaktywniony tylko wtedy, gdy jest szansa na wykorzystanie atomu, który on wyprodukował. Nie oznacza to, że zawsze po odebraniu tego sygnału będzie w stanie zakończyć
 sekcję krytyczną (dlatego pętla `while (!h_needed)`, a nie warunek `if (!h_needed)`), gdyż być może wcześniej został wyprodukowany nowy atom potrzebnego
 pierwiastka, który został użyty do budowy cząsteczki wody w pierwszym wejściu producenta do sekcji krytycznej.
